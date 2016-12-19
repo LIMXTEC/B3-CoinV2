@@ -1,0 +1,11 @@
+[Protocol]
+exec=b3coin-qt '%u'
+protocol=b3coin
+input=none
+output=none
+helper=true
+listing=
+reading=false
+writing=false
+makedir=false
+deleting=false

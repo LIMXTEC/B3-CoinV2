@@ -1,0 +1,9 @@
+Building B3-Coin
+
+See doc/readme-qt.rst for instructions on building B3-Coin QT,
+the intended-for-end-users, nice-graphical-interface, reference
+implementation of B3-Coin.
+
+See doc/build-*.txt for instructions on building b3coind,
+the intended-for-services, no-graphical-interface, reference
+implementation of B3-Coin.

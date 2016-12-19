@@ -1,0 +1,12 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=B3-Coin
+Comment=B3-Coin P2P Cryptocurrency
+Comment[fr]=B3-Coin, monnaie virtuelle cryptographique pair à pair
+Comment[tr]=B3-Coin, eşten eşe kriptografik sanal para birimi
+Exec=/usr/bin/b3coin-qt
+Terminal=false
+Type=Application
+Icon=/usr/share/pixmaps/bitcoin80.xpm
+MimeType=x-scheme-handler/b3coin;
+Categories=Office;
