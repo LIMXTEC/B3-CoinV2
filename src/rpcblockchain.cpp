@@ -17,6 +17,11 @@ double GetDifficulty(const CBlockIndex* blockindex)
 {
     // Floating point number that is a multiple of the minimum difficulty,
     // minimum difficulty = 1.0.
+    
+    //if (pindexBest->nHeight >= Params().LastPOWBlock())
+    //    return 0;
+    // pprev ??? 
+    
     if (blockindex == NULL)
     {
         if (pindexBest == NULL)
