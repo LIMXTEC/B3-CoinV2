@@ -2061,10 +2061,15 @@ bool CBlock::AcceptBlock()
 		
 
     // Check coinbase timestamp
-    if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime))
-		if( pindexPrev->nHeight >= 500){
-        return DoS(50, error("AcceptBlock() : coinbase timestamp is too early"));
-		}
+    if (GetBlockTime() > FutureDriftPOW((int64_t)vtx[0].nTime) && pindexPrev->nHeight <= Params().LastPOWBlock())
+	{
+	return DoS(50, error("AcceptBlock() : POW coinbase timestamp is too early"));
+	}
+	
+	  if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime) && pindexPrev->nHeight > Params().LastPOWBlock())
+	{
+	return DoS(50, error("AcceptBlock() : POS coinbase timestamp is too early"));
+	}
 		
     // Check coinstake timestamp
     if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))

@@ -61,7 +61,8 @@ static const int64_t COIN_YEAR_REWARD = 1 * CENT; // 1% per year
 static const int VAR10K = 10000;
 
 
-inline int64_t FutureDrift(int64_t nTime) { return nTime + 600; } // 200sec
+inline int64_t FutureDrift(int64_t nTime) { return nTime + 600;}// 600sec
+inline int64_t FutureDriftPOW(int64_t nTime) { return nTime + 100000;}
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
