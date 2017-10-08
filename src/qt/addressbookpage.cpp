@@ -1,3 +1,6 @@
+#if defined(HAVE_CONFIG_H)
+#include "b3coin-config.h"
+#endif
 #include "addressbookpage.h"
 #include "ui_addressbookpage.h"
 
