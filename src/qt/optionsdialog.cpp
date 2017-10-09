@@ -1,5 +1,5 @@
 #if defined(HAVE_CONFIG_H)
-#include "bitcoin-config.h"
+#include "b3coin-config.h"
 #endif
 
 #include "optionsdialog.h"

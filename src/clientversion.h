@@ -1,7 +1,7 @@
 #ifndef CLIENTVERSION_H
 #define CLIENTVERSION_H
 #if defined(HAVE_CONFIG_H)
-#include "bitcoin-config.h"
+#include "b3coin-config.h"
 #else
 //
 // client versioning
