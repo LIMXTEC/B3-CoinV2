@@ -4,6 +4,9 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
+#if defined(HAVE_CONFIG_H)
+#include "bitcoin-config.h"
+#endif
 
 #include "core.h"
 #include "bignum.h"
