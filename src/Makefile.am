@@ -115,10 +115,10 @@ libbitcoin_a_SOURCES = alert.cpp \
 nodist_libbitcoin_a_SOURCES = $(top_srcdir)/src/obj/build.h
 #
 
-# bitcoind binary #
-bitcoind_LDADD = libbitcoin.a leveldb/libleveldb.a leveldb/libmemenv.a \
+# b3coind binary #
+b3coind_LDADD = libbitcoin.a leveldb/libleveldb.a leveldb/libmemenv.a \
   $(BOOST_LIBS)
-bitcoind_SOURCES = bitcoind.cpp
+b3coind_SOURCES = bitcoind.cpp
 #
 
 leveldb/libleveldb.a:
