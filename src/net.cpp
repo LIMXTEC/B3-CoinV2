@@ -2,9 +2,7 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#if defined(HAVE_CONFIG_H)
-#include "b3coin-config.h"
-#endif
+
 #include "chainparams.h"
 #include "db.h"
 #include "net.h"

@@ -3,9 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_NETBASE_H
 #define BITCOIN_NETBASE_H
-#if defined(HAVE_CONFIG_H)
-#include "b3coin-config.h"
-#endif
+
 #include <string>
 #include <vector>
 
