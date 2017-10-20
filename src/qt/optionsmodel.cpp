@@ -1,7 +1,3 @@
-#if defined(HAVE_CONFIG_H)
-#include "b3coin-config.h"
-#endif
-
 #include "optionsmodel.h"
 
 #include "bitcoinunits.h"
