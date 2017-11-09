@@ -110,6 +110,13 @@ sudo su
 ./bootstrap.sh
 ./bjam install
 
+libleveldb & libmemenv
+----------------------
+cd src/leveldb
+chmod +x build_detect_platform
+make clean
+make libmemenv.a libleveldb.a
+
 
 Security
 --------
