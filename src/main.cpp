@@ -1276,13 +1276,13 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     if (pindexLast == NULL)
         return bnTargetLimit.GetCompact(); // genesis block
 
-    //if ( Params().NetworkID() == CChainParams::TESTNET ){
+    if ( Params().NetworkID() == CChainParams::TESTNET ){
         CBigNum bnTestTarget;
         bnTestTarget = CBigNum(~uint256(0) >> 9);
         return bnTestTarget.GetCompact();
-    //}
+    }
 
-    /* const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
+    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
     if (pindexPrev->pprev == NULL)
         return bnTargetLimit.GetCompact(); // first block
     const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, fProofOfStake);
@@ -1313,7 +1313,7 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     if (bnNew <= 0 || bnNew > bnTargetLimit)
         bnNew = bnTargetLimit;
 
-    return bnNew.GetCompact(); */
+    return bnNew.GetCompact(); 
 
 }
 
@@ -1323,7 +1323,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
     bnTarget.SetCompact(nBits);
 
     // Check range
-    if (bnTarget <= 0 /* || bnTarget > Params().ProofOfWorkLimit() */)
+    if (bnTarget <= 0  || bnTarget > Params().ProofOfWorkLimit() )
         return error("CheckProofOfWork() : nBits below minimum work");
 
 
