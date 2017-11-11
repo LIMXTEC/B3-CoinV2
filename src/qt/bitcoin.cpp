@@ -15,6 +15,9 @@
 #include "wallet.h"
 #include "ui_interface.h"
 #include "paymentserver.h"
+
+#include "fn-config.h"
+
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
 #endif
@@ -172,6 +175,14 @@ int main(int argc, char *argv[])
         return 1;
     }
     ReadConfigFile(mapArgs, mapMultiArgs);
+	
+	 ///  parse conf
+    std::string strErr;
+    if(!fundamentalnodeConfig.read(strErr)) {
+        QMessageBox::critical(0, QObject::tr("B3-Coin"),
+                              QObject::tr("Error reading masternode configuration file: %1").arg(strErr.c_str()));
+        return false;
+    }
 
     // Application identification (must be set before OptionsModel is initialized,
     // as it is used to locate QSettings)

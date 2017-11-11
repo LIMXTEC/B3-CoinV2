@@ -12,6 +12,10 @@
 #include "checkpoints.h"
 #include "db.h"
 #include "init.h"
+
+#include "fn-manager.h"
+#include "spork.h"
+#include "fundamentalnode.h" //TODO
 #include "kernel.h"
 #include "net.h"
 #include "txdb.h"
@@ -341,10 +345,11 @@ bool IsStandardTx(const CTransaction& tx, string& reason)
         }
         if (whichType == TX_NULL_DATA)
             nDataOut++;
-        if (txout.nValue == 0) {
+        //TODO: here we need a good solution
+        /*if (txout.nValue == 0) {
             reason = "dust";
             return false;
-        }
+        }*/
         if (!txout.scriptPubKey.HasCanonicalPushes()) {
             reason = "scriptpubkey-non-canonical-push";
             return false;
@@ -520,6 +525,47 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
 
     return pindexBest->nHeight - pindex->nHeight + 1;
 }
+///TODO: Start
+int GetInputAge(CTxIn& vin)
+{
+    // Fetch previous transactions (inputs):
+    /*CCoinsView viewDummy;
+    CCoinsViewCache view(viewDummy);
+    {
+        LOCK(mempool.cs);
+        CCoinsViewCache &viewChain = *pcoinsTip;
+        CCoinsViewMemPool viewMempool(viewChain, mempool);
+        view.SetBackend(viewMempool); // temporarily switch cache backend to db+mempool view
+
+        const uint256& prevHash = vin.prevout.hash;
+        CCoins coins;
+        view.GetCoins(prevHash, coins); // this is certainly allowed to fail
+        view.SetBackend(viewDummy); // switch back to avoid locking mempool for too long
+    }
+
+    if(!view.HaveCoins(vin.prevout.hash)) return -1;
+
+    const CCoins &coins = view.GetCoins(vin.prevout.hash);
+
+    return (pindexBest->nHeight+1) - coins.nHeight;*/
+	
+	const uint256& prevHash = vin.prevout.hash;
+    CTransaction tx;
+    uint256 hashBlock;
+    bool fFound = GetTransaction(prevHash, tx, hashBlock);
+    if(fFound)
+    {
+    if(mapBlockIndex.find(hashBlock) != mapBlockIndex.end())
+    {
+        return pindexBest->nHeight - mapBlockIndex[hashBlock]->nHeight;
+    }
+    else
+        return 0;
+    }
+    else
+        return 0;
+}
+///TODO:ends
 
 
 
@@ -679,7 +725,16 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool fLimitFree,
                           error("AcceptToMemoryPool : too many sigops %s, %d > %d",
                                 hash.ToString(), nSigOps, MAX_TX_SIGOPS));
 
-        int64_t nFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
+        int64_t nFees = 0;
+
+        if((tx.GetValueIn(mapInputs) - tx.GetValueOut()) >= FUNDAMENTALNODEAMOUNT){
+            nFees = tx.GetValueIn(mapInputs) - FUNDAMENTALNODEAMOUNT - tx.GetValueOut();
+            LogPrintf("Fundamental transaction ");
+        } else{
+            LogPrintf(" Not Fundamental transaction ");
+            nFees = tx.GetValueIn(mapInputs) - tx.GetValueOut();
+        }
+
         unsigned int nSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
         // Don't accept it if it can't get into a block
@@ -711,6 +766,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool fLimitFree,
             LogPrint("mempool", "Rate limit dFreeCount: %g => %g\n", dFreeCount, dFreeCount+nSize);
             dFreeCount += nSize;
         }
+
+        /** If by accident, someone sent too much burnt transaction then expected
+         * then, it should be rejected otherwise he will lose his coins
+         * */
+
+        if ( nFees > txMinFee * 10000)
+                    return error("AcceptToMempool : insane fees %s, %d > %d",
+                                 hash.ToString(),
+                                 nFees, MIN_RELAY_TX_FEE * 10000);
 
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
@@ -744,6 +808,109 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool fLimitFree,
            pool.mapTx.size());
     return true;
 }
+
+///TODO: Start
+bool AcceptableFundamentalTxn(CTxMemPool& pool, CTransaction &tx, bool ignoreFees)
+{
+    AssertLockHeld(cs_main);
+    /*if (pfMissingInputs)
+        *pfMissingInputs = false;*/
+
+   // CTransaction tx(txo);
+    string reason;
+
+    if (!tx.CheckTransaction())
+        return error("AcceptableFundamentalTxn : CheckTransaction failed");
+
+    // Coinbase is only valid in a block, not as a loose transaction
+    if (tx.IsCoinBase())
+        return tx.DoS(100, error("AcceptableFundamentalTxn : coinbase as individual tx"));
+
+    // ppcoin: coinstake is also only valid in a block, not as a loose transaction
+    if (tx.IsCoinStake())
+        return tx.DoS(100, error("AcceptableFundamentalTxn : coinstake as individual tx"));
+
+    // is it already in the memory pool?
+    uint256 hash = tx.GetHash();
+    if (pool.exists(hash))
+        return false;
+
+
+    // Check for conflicts with in-memory transactions
+    {
+    LOCK(pool.cs); // protect pool.mapNextTx
+    for (unsigned int i = 0; i < tx.vin.size(); i++)
+    {
+        COutPoint outpoint = tx.vin[i].prevout;
+        if (pool.mapNextTx.count(outpoint))
+        {
+            // Disable replacement feature for now
+            return false;
+        }
+    }
+    }
+
+    {
+        CTxDB txdb("r");
+
+        MapPrevTx mapInputs;
+        map<uint256, CTxIndex> mapUnused;
+        bool fInvalid = false;
+        if (!tx.FetchInputs(txdb, mapUnused, false, false, mapInputs, fInvalid))
+        {
+            if (fInvalid)
+                return error("AcceptableFundamentalTxn : FetchInputs found invalid tx %s", hash.ToString());
+            return false;
+        }
+
+        // Check for non-standard pay-to-script-hash in inputs
+        //if (!TestNet() && !AreInputsStandard(tx, mapInputs))
+          //  return error("AcceptToMemoryPool : nonstandard transaction input");
+
+        // Check that the transaction doesn't have an excessive number of
+        // sigops, making it impossible to mine. Since the coinbase transaction
+        // itself can contain sigops MAX_TX_SIGOPS is less than
+        // MAX_BLOCK_SIGOPS; we still consider this an invalid rather than
+        // merely non-standard transaction.
+        unsigned int nSigOps = GetLegacySigOpCount(tx);
+        nSigOps += GetP2SHSigOpCount(tx, mapInputs);
+        if (nSigOps > MAX_TX_SIGOPS)
+            return tx.DoS(0,
+                          error("AcceptableFundamentalTxn : too many sigops %s, %d > %d",
+                                hash.ToString(), nSigOps, MAX_TX_SIGOPS));
+
+        int64_t nValueInTxn = tx.GetValueIn(mapInputs);
+        int64_t nValueOutTxn = tx.GetValueOut();
+
+        if((nValueInTxn - nValueOutTxn) < FUNDAMENTALNODEAMOUNT){
+            return false;
+            //return error("AcceptableFundamentalTxn : Transaction has lower value then expected (actual = %d, expected = %d", nValueInTxn, FUNDAMENTALNODEAMOUNT);
+
+        }
+
+            /**we can hava a fee checker later
+             * /
+        /** if (fRejectInsaneFee && nFees > txMinFee * 10000)
+            return error("AcceptableFundamentalTxn: : insane fees %s, %d > %d",
+                         hash.ToString(),
+                         nFees, MIN_RELAY_TX_FEE * 10000);*/
+
+        // Check against previous transactions
+        // This is done last to help prevent CPU exhaustion denial-of-service attacks.
+        /*if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, true, false, STANDARD_SCRIPT_VERIFY_FLAGS, false))
+        {
+            return error("AcceptableFundamentalTxn : ConnectInputs failed %s", hash.ToString());
+        } **/
+    }
+
+
+    /*LogPrint("mempool", "AcceptableFundamentalTxn : accepted %s (poolsz %u)\n",
+           hash.ToString(),
+           pool.mapTx.size());
+    */
+    return true;
+}
+ ///TODO:end
 
 
 
@@ -964,10 +1131,14 @@ void static PruneOrphanBlocks()
 
 int64_t GetProofOfWorkReward(int64_t nFees, int nHeight)
 {
-    int64_t nSubsidy = 0;
+    int64_t nSubsidy = 10* COIN;
 
     if(nHeight == 1) {
         nSubsidy = 260000 * COIN;
+    }
+    if ( Params().NetworkID() == CChainParams::TESTNET ){
+        nSubsidy = 10 * COIN;
+        return nSubsidy + nFees;
     }
     
     else if(nHeight > Params().LastPOWBlock()) {
@@ -1052,6 +1223,44 @@ int64_t GetProofOfStakeReward(const CBlockIndex* pindexPrev, int64_t nCoinAge, i
 	return nSubsidy + nFees + staticreward;
 }
 
+int64_t GetFundamentalnodePayment(int nHeight, int64_t blockValue)
+{
+    int64_t ret = (60 * blockValue)/ 100; // start at 20%
+
+    /* if(Params().NetworkIDString() == CBaseChainParams::TESTNET) {
+        if(nHeight > 46000)             ret += blockValue / 20; //25% - 2014-10-07
+        if(nHeight > 46000+((576*1)*1)) ret += blockValue / 20; //30% - 2014-10-08
+        if(nHeight > 46000+((576*1)*2)) ret += blockValue / 20; //35% - 2014-10-09
+        if(nHeight > 46000+((576*1)*3)) ret += blockValue / 20; //40% - 2014-10-10
+        if(nHeight > 46000+((576*1)*4)) ret += blockValue / 20; //45% - 2014-10-11
+        if(nHeight > 46000+((576*1)*5)) ret += blockValue / 20; //50% - 2014-10-12
+        if(nHeight > 46000+((576*1)*6)) ret += blockValue / 20; //55% - 2014-10-13
+        if(nHeight > 46000+((576*1)*7)) ret += blockValue / 20; //60% - 2014-10-14
+    }
+
+    if(nHeight > 158000)               ret += blockValue / 20; // 158000 - 25.0% - 2014-10-24
+    if(nHeight > 158000+((576*30)* 1)) ret += blockValue / 20; // 175280 - 30.0% - 2014-11-25
+    if(nHeight > 158000+((576*30)* 2)) ret += blockValue / 20; // 192560 - 35.0% - 2014-12-26
+    if(nHeight > 158000+((576*30)* 3)) ret += blockValue / 40; // 209840 - 37.5% - 2015-01-26
+    if(nHeight > 158000+((576*30)* 4)) ret += blockValue / 40; // 227120 - 40.0% - 2015-02-27
+    if(nHeight > 158000+((576*30)* 5)) ret += blockValue / 40; // 244400 - 42.5% - 2015-03-30
+    if(nHeight > 158000+((576*30)* 6)) ret += blockValue / 40; // 261680 - 45.0% - 2015-05-01
+    if(nHeight > 158000+((576*30)* 7)) ret += blockValue / 40; // 278960 - 47.5% - 2015-06-01
+    if(nHeight > 158000+((576*30)* 9)) ret += blockValue / 40; // 313520 - 50.0% - 2015-08-03 */
+
+    /* 
+        Hard for will activate on block 348080 separating the two networks (v11 and earier and v12)
+
+        if(nHeight > 158000+((576*30)*11)) ret += blockValue / 40; // 348080 - 52.5% - 2015-10-05
+        if(nHeight > 158000+((576*30)*13)) ret += blockValue / 40; // 382640 - 55.0% - 2015-12-07
+        if(nHeight > 158000+((576*30)*15)) ret += blockValue / 40; // 417200 - 57.5% - 2016-02-08
+        if(nHeight > 158000+((576*30)*17)) ret += blockValue / 40; // 451760 - 60.0% - 2016-04-11
+    */
+
+    return ret;
+}
+
+
 // ppcoin: find last block index up to pindex
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
 {
@@ -1067,7 +1276,13 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     if (pindexLast == NULL)
         return bnTargetLimit.GetCompact(); // genesis block
 
-    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
+    //if ( Params().NetworkID() == CChainParams::TESTNET ){
+        CBigNum bnTestTarget;
+        bnTestTarget = CBigNum(~uint256(0) >> 9);
+        return bnTestTarget.GetCompact();
+    //}
+
+    /* const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
     if (pindexPrev->pprev == NULL)
         return bnTargetLimit.GetCompact(); // first block
     const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, fProofOfStake);
@@ -1098,7 +1313,7 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     if (bnNew <= 0 || bnNew > bnTargetLimit)
         bnNew = bnTargetLimit;
 
-    return bnNew.GetCompact();
+    return bnNew.GetCompact(); */
 
 }
 
@@ -1108,8 +1323,9 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
     bnTarget.SetCompact(nBits);
 
     // Check range
-    if (bnTarget <= 0 || bnTarget > Params().ProofOfWorkLimit())
+    if (bnTarget <= 0 /* || bnTarget > Params().ProofOfWorkLimit() */)
         return error("CheckProofOfWork() : nBits below minimum work");
+
 
     // Check proof of work matches claimed amount
     if (hash > bnTarget.getuint256())
@@ -1413,18 +1629,59 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
                 return DoS(100, error("ConnectInputs() : %s value in < value out", GetHash().ToString()));
 
             // Tally transaction fees
-            int64_t nTxFee = nValueIn - GetValueOut();
+            int64_t nTxFee = 0;
+
+            if((nValueIn - GetValueOut()) >= FUNDAMENTALNODEAMOUNT ){
+                nTxFee = nValueIn - FUNDAMENTALNODEAMOUNT - GetValueOut();
+                LogPrintf("ConnectInputs : Funamental Transaction");
+            } else{
+                nTxFee = nValueIn - GetValueOut();
+                LogPrintf("ConnectInputs : Not a Funamental Transaction");
+            }
+
+
+            //nValueIn - GetValueOut();
             if (nTxFee < 0)
                 return DoS(100, error("ConnectInputs() : %s nTxFee < 0", GetHash().ToString()));
 
             nFees += nTxFee;
             if (!MoneyRange(nFees))
                 return DoS(100, error("ConnectInputs() : nFees out of range"));
+            //TODO:
+            //insane fee check
+
         }
     }
 
     return true;
 }
+
+
+///TODO: Start
+bool DisconnectBlocksAndReprocess(int blocks)
+{
+    /* LOCK(cs_main);
+
+    CValidationState state;
+
+    LogPrintf("DisconnectBlocksAndReprocess: Got command to replay %d blocks\n", blocks);
+    for(int i = 0; i <= blocks; i++)
+        DisconnectTip(state); */
+
+    return true;
+}
+/*
+    DisconnectBlockAndInputs
+
+    Remove conflicting blocks for successful InstantX transaction locks
+    This should be very rare (Probably will never happen)
+*/
+bool DisconnectBlockAndInputs( CTransaction txLock)
+{
+
+    return true;
+}///TODO: ends
+
 
 bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
@@ -1478,6 +1735,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     int64_t nValueIn = 0;
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
+    bool IsFnBurntTxn = false;
     unsigned int nSigOps = 0;
     BOOST_FOREACH(CTransaction& tx, vtx)
     {
@@ -1528,10 +1786,27 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
             int64_t nTxValueIn = tx.GetValueIn(mapInputs);
             int64_t nTxValueOut = tx.GetValueOut();
+
+            //check if burnt txn for fundamental node
+            if((nTxValueIn - nTxValueOut) >= FUNDAMENTALNODEAMOUNT ){
+                IsFnBurntTxn = true;
+                //LogPrintf("IsFnBurntTxn is true now");
+            }else {
+                //LogPrintf("IsFnBurntTxn is flase Now, for FNamount = %d, nTxValueIn = %d, nTxValurOut = %d", FUNDAMENTALNODEAMOUNT, nTxValueIn, nTxValueOut);
+            }
+
             nValueIn += nTxValueIn;
             nValueOut += nTxValueOut;
-            if (!tx.IsCoinStake())
-                nFees += nTxValueIn - nTxValueOut;
+            if (!tx.IsCoinStake()){
+                if(!IsFnBurntTxn){
+                    nFees += nTxValueIn - nTxValueOut;
+                    //LogPrintf("ConnectBlock : Not a Funamental Transaction nFees = %d", nFees);
+                } else{
+                    nFees += nTxValueIn - FUNDAMENTALNODEAMOUNT - nTxValueOut;
+                    //LogPrintf("ConnectBlock : Funamental Transaction, nFees = %d", nFees);
+                }
+                //nFees += nTxValueIn - nTxValueOut;
+            }
             if (tx.IsCoinStake())
                 nStakeReward = nTxValueOut - nTxValueIn;
 
@@ -1998,6 +2273,120 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
     // Check proof-of-stake block signature
     if (fCheckSig && !CheckBlockSignature())
         return DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
+	
+	///TODO: Start 
+	/* // ----------- instantX transaction scanning -----------
+
+    if(!IsSporkActive(SPORK_1_FUNDAMENTALNODE_PAYMENTS_ENFORCEMENT)){
+        BOOST_FOREACH(const CTransaction& tx, block.vtx){
+            if (!tx.IsCoinBase()){
+                //only reject blocks when it's based on complete consensus
+                BOOST_FOREACH(const CTxIn& in, tx.vin){
+                    if(mapLockedInputs.count(in.prevout)){
+                        if(mapLockedInputs[in.prevout] != tx.GetHash()){
+                            LogPrintf("CheckBlock() : found conflicting transaction with transaction lock %s %s\n", mapLockedInputs[in.prevout].ToString().c_str(), tx.GetHash().ToString().c_str());
+                            return state.DoS(0, error("CheckBlock() : found conflicting transaction with transaction lock"),
+                                             REJECT_INVALID, "conflicting-tx-ix");
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        LogPrintf("CheckBlock() : skipping transaction locking checks\n");
+    }*/
+
+
+   // ----------- fundamentalnode payments -----------
+
+    bool FundamentalnodePayments = false;
+
+    if(TestNet()){
+        if(GetBlockTime() > START_FUNDAMENTALNODE_PAYMENTS_TESTNET) FundamentalnodePayments = true;
+    } else {
+        if(GetBlockTime() > START_FUNDAMENTALNODE_PAYMENTS) FundamentalnodePayments = true;
+    }
+
+    if(!IsSporkActive(SPORK_1_FUNDAMENTALNODE_PAYMENTS_ENFORCEMENT)){
+        FundamentalnodePayments = true; // Bitsenddev
+        if(fDebug) LogPrintf("CheckBlock() : Fundamentalnode payment enforcement is off\n");
+    }
+
+    if(FundamentalnodePayments)
+    {
+        LOCK2(cs_main, mempool.cs);
+
+        CBlockIndex *pindex = pindexBest;
+        if(IsProofOfStake() && pindex != NULL){
+            if(pindex->GetBlockHash() == hashPrevBlock){
+                //int64_t fundamentalnodePaymentAmount = GetFundamentalnodePayment(pindex->nHeight+1, block.vtx[0].GetValueOut());
+				int64_t fundamentalnodePaymentAmount;
+                for (int i = vtx[1].vout.size(); i--> 0; ) {
+                    fundamentalnodePaymentAmount = vtx[1].vout[i].nValue;
+                    break;
+                }
+				
+				int64_t hardblockpowreward = vtx[0].vout[0].nValue; 
+				LogPrintf("## CheckBlock() : fundamental node payment %d\n", fundamentalnodePaymentAmount);
+				bool fIsInitialDownload = IsInitialBlockDownload();
+
+                // If we don't already have its previous block, skip fundamentalnode payment step
+                if (!fIsInitialDownload && pindex != NULL)
+                {
+                    bool foundPaymentAmount = false;
+                    bool foundPayee = false;
+                    bool foundPaymentAndPayee = false;
+					CScript payee;
+                    if(!fundamentalnodePayments.GetBlockPayee(pindexBest->nHeight+1, payee) || payee == CScript()){
+                        foundPayee = true; //doesn't require a specific payee
+                        foundPaymentAmount = true;
+                        foundPaymentAndPayee = true;
+						LogPrintf("CheckBlock() : Using non-specific fundamentalnode payments %d\n", pindexBest->nHeight+1);
+				}
+					
+				// Funtion no Intitial Download
+				for (unsigned int i = 0; i < vtx[1].vout.size(); i++) {
+				if(vtx[1].vout[i].nValue == fundamentalnodePaymentAmount )
+                            foundPaymentAmount = true;
+				if(vtx[1].vout[i].scriptPubKey == payee )
+                            foundPayee = true;
+				if(vtx[1].vout[i].nValue == fundamentalnodePaymentAmount && vtx[1].vout[i].scriptPubKey == payee)
+                            foundPaymentAndPayee = true;
+                    }
+				/*//Bitsenddev 18-10-2015 Bitsend proof of payment Number 2
+				if (chainActive.Tip()->nHeight <= 232500)
+				{
+				int sizesum2 = block.vtx[0].vout.size();
+				if(sizesum2 > 1 && foundPaymentAndPayee == true) 
+				{
+				foundPaymentAndPayee = true;
+				}
+				else {foundPaymentAndPayee = true;}
+				}*/
+                    CTxDestination address1;
+                    ExtractDestination(payee, address1);
+                    CBitcoinAddress address2(address1);
+
+                    if(!foundPaymentAndPayee) {
+                        LogPrintf("CheckBlock() : !!Couldn't find fundamentalnode payment(%d|%d) or payee(%d|%s) nHeight %d. \n", foundPaymentAmount, fundamentalnodePaymentAmount, foundPayee, address2.ToString().c_str(), pindexBest->nHeight+1);
+                        //if(!RegTest()) return state.DoS(100, error("CheckBlock() : Couldn't find fundamentalnode payment or payee"));
+                    } else {
+                        LogPrintf("CheckBlock() : Found payment(%d|%d) or payee(%d|%s) nHeight %d. \n", foundPaymentAmount, fundamentalnodePaymentAmount, foundPayee, address2.ToString().c_str(), pindexBest->nHeight+1);
+                    }
+                } else {
+                    LogPrintf("CheckBlock() : Is initial download, skipping fundamentalnode payment check %d\n", pindexBest->nHeight+1);
+                }
+            } else {
+                LogPrintf("CheckBlock() : Skipping fundamentalnode payment check - nHeight %d Hash %s\n", pindexBest->nHeight+1, GetHash().ToString().c_str());
+            }
+        } else {
+            LogPrintf("CheckBlock() : pindex is null, skipping fundamentalnode payment check\n");
+        }
+    } else {
+        LogPrintf("CheckBlock() : skipping fundamentalnode payment checks\n");
+    } ///TODO: ends
+
+
 
     // Check transactions
     BOOST_FOREACH(const CTransaction& tx, vtx)
@@ -2305,6 +2694,14 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
             delete mi->second;
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
+    }
+	
+	if(!fProMode){
+        if (!fImporting && !fReindex && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate()){
+            //darkSendPool.NewBlock();
+            fundamentalnodePayments.ProcessBlock(pindexBest->nHeight+10);
+            fnscan.DoFundamentalnodePOSChecks();
+        }
     }
 
     LogPrintf("ProcessBlock: ACCEPTED\n");
@@ -2773,6 +3170,13 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
     case MSG_BLOCK:
         return mapBlockIndex.count(inv.hash) ||
                mapOrphanBlocks.count(inv.hash);
+			   
+	case MSG_SPORK:
+        return mapSporks.count(inv.hash);
+    case MSG_FUNDAMENTALNODE_WINNER:
+        return mapSeenFundamentalnodeVotes.count(inv.hash);
+    case MSG_FUNDAMENTALNODE_SCANNING_ERROR:
+        return mapFundamentalnodeScanningErrors.count(inv.hash);
     }
     // Don't know what it is, just say we already got one
     return true;
@@ -2851,6 +3255,35 @@ void static ProcessGetData(CNode* pfrom)
                         pushed = true;
                     }
                 }
+				
+				if (!pushed && inv.type == MSG_SPORK) {
+                    if(mapSporks.count(inv.hash)){
+                        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                        ss.reserve(1000);
+                        ss << mapSporks[inv.hash];
+                        pfrom->PushMessage("spork", ss);
+                        pushed = true;
+                    }
+                }
+                if (!pushed && inv.type == MSG_FUNDAMENTALNODE_WINNER) {
+                    if(mapSeenFundamentalnodeVotes.count(inv.hash)){
+                        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                        ss.reserve(1000);
+                        ss << mapSeenFundamentalnodeVotes[inv.hash];
+                        pfrom->PushMessage("fnw", ss);
+                        pushed = true;
+                    }
+                }
+                if (!pushed && inv.type == MSG_FUNDAMENTALNODE_SCANNING_ERROR) {
+                    if(mapFundamentalnodeScanningErrors.count(inv.hash)){
+                        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                        ss.reserve(1000);
+                        ss << mapFundamentalnodeScanningErrors[inv.hash];
+                        pfrom->PushMessage("fnse", ss);
+                        pushed = true;
+                    }
+                }
+				
                 if (!pushed) {
                     vNotFound.push_back(inv);
                 }
@@ -3451,7 +3884,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else
     {
-        // Ignore unknown commands for extensibility
+		///TODO: Starts
+         //probably one the extensions
+        //darkSendPool.ProcessMessageDarksend(pfrom, strCommand, vRecv);
+        fnmanager.ProcessMessage(pfrom, strCommand, vRecv);
+        ProcessMessageFundamentalnodePayments(pfrom, strCommand, vRecv);
+        //ProcessMessageInstantX(pfrom, strCommand, vRecv);
+        ProcessSpork(pfrom, strCommand, vRecv);
+        ProcessMessageFundamentalnodePOS(pfrom, strCommand, vRecv); 
+		///TODO: ends
     }
 
 

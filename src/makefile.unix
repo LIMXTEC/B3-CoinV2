@@ -33,13 +33,13 @@ LIBS += \
    -l ssl \
    -l crypto
 
-ifndef USE_UPNP
-	override USE_UPNP = -
-endif
-ifneq (${USE_UPNP}, -)
-	LIBS += -l miniupnpc
+I#fndef USE_UPNP
+#	override USE_UPNP = -
+#endif
+#ifneq (${USE_UPNP}, -)
+#	LIBS += -l miniupnpc
 	DEFS += -DUSE_UPNP=$(USE_UPNP)
-endif
+#endif
 
 LIBS+= \
  -Wl,-B$(LMODE2) \
@@ -100,6 +100,14 @@ xCXXFLAGS=-O2 $(EXT_OPTIONS) -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wfo
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
 OBJS= \
+	obj/bitpool.o \
+	obj/fn-activity.o \
+    obj/fn-manager.o \
+    obj/fn-config.o \
+    obj/fn-service.o \
+    obj/spork.o \
+    obj/fundamentalnode.o \
+    obj/rpcfundamentalnode.o \
     obj/alert.o \
     obj/version.o \
     obj/checkpoints.o \
@@ -139,6 +147,7 @@ OBJS= \
 ifeq (${USE_WALLET}, 1)
     DEFS += -DENABLE_WALLET
     OBJS += \
+		obj/fn-activity.o \
         obj/db.o \
         obj/miner.o \
         obj/rpcdump.o \

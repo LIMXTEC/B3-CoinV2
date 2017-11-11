@@ -637,8 +637,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>830</width>
-        <height>172</height>
+        <width>824</width>
+        <height>141</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -766,6 +766,13 @@
         </size>
        </property>
       </spacer>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkBoxFnPayment">
+       <property name="text">
+        <string>Fundamental Node Payment</string>
+       </property>
+      </widget>
      </item>
      <item>
       <widget class="QPushButton" name="sendButton">

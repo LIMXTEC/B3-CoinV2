@@ -13,6 +13,8 @@
 #include "txdb.h"
 #include "ui_interface.h"
 #include "walletdb.h"
+#include "fn-activity.h"
+#include "fn-manager.h"
 
 #include <boost/algorithm/string/replace.hpp>
 
@@ -971,6 +973,11 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
             LogPrintf("Relaying wtx %s\n", hash.ToString());
             RelayTransaction((CTransaction)*this, hash);
         }
+		/*if(strCommand == "txlreq"){
+                RelayTransactionLockReq((CTransaction)*this, hash, true);
+            } else {
+                RelayTransaction((CTransaction)*this, hash);
+            }*///TODO
     }
 }
 
@@ -1100,7 +1107,7 @@ int64_t CWallet::GetMintedBalance() const
 }
 
 // populate vCoins with vector of spendable COutputs
-void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl) const
+void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool IsFnBurntCoins) const
 {
     vCoins.clear();
 
@@ -1126,10 +1133,18 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
             if (nDepth < 0)
                 continue;
 
-            for (unsigned int i = 0; i < pcoin->vout.size(); i++)
-                if (!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && pcoin->vout[i].nValue >= nMinimumInputValue &&
-                (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
-                    vCoins.push_back(COutput(pcoin, i, nDepth));
+            if(IsFnBurntCoins){
+                for (unsigned int i = 0; i < pcoin->vout.size(); i++)
+                    if (!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && (pcoin->vout[i].nValue == 1*COIN/*nMinimumInputValue*/) && (GetDebit(*pcoin) >= FUNDAMENTALNODEAMOUNT) &&
+                    (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
+                        vCoins.push_back(COutput(pcoin, i, nDepth));
+            } else{
+
+                for (unsigned int i = 0; i < pcoin->vout.size(); i++)
+                    if (!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && pcoin->vout[i].nValue >= nMinimumInputValue &&
+                    (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
+                        vCoins.push_back(COutput(pcoin, i, nDepth));
+            }
 
         }
     }
@@ -1234,6 +1249,9 @@ int64_t CWallet::GetNewMint() const
     }
     return nTotal;
 }
+/* select coins with 1 unspent output */
+// TODO
+
 
 bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
 {
@@ -1400,7 +1418,7 @@ bool CWallet::SelectCoinsForStaking(int64_t nTargetValue, unsigned int nSpendTim
     return true;
 }
 
-bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
+bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl, bool IsFnPayment)
 {
     int64_t nValue = 0;
     BOOST_FOREACH (const PAIRTYPE(CScript, int64_t)& s, vecSend)
@@ -1451,8 +1469,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 int64_t nTotalValue = nValue + nFeeRet;
                 double dPriority = 0;
                 // vouts to the payees
-                BOOST_FOREACH (const PAIRTYPE(CScript, int64_t)& s, vecSend)
-                    wtxNew.vout.push_back(CTxOut(s.second, s.first));
+                //if fundamental node payment, we here should have one output
+                if(IsFnPayment){
+
+                    //nValue should be equal to FUNDAMENTALAMOUNT
+                    if(nTotalValue < FUNDAMENTALNODEAMOUNT){
+                        return false;
+                    }
+
+                    //zero output transaction, with only one output(here we are avoinding "send many"
+                    wtxNew.vout.push_back(CTxOut(1*COIN, vecSend[0].first));//we using 1 coin just for testing purposes
+
+
+                } else{
+                    //simple transaction
+                    BOOST_FOREACH (const PAIRTYPE(CScript, int64_t)& s, vecSend)
+                        wtxNew.vout.push_back(CTxOut(s.second, s.first));
+                }
 
                 // Choose coins to use
                 set<pair<const CWalletTx*,unsigned int> > setCoins;
@@ -1497,9 +1530,20 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         scriptChange.SetDestination(vchPubKey.GetID());
                     }
 
-                    // Insert change txn at random position:
-                    vector<CTxOut>::iterator position = wtxNew.vout.begin()+GetRandInt(wtxNew.vout.size()+1);
-                    wtxNew.vout.insert(position, CTxOut(nChange, scriptChange));
+                    if(IsFnPayment){
+                        //since, we strict the burnt transaction to a specific position we are forced to reduce anonymity
+                        /** Here we should make sure that there are only two outputs from a fundamental burn payment
+                         * */
+                        //wtxNew.vout.push_back(CTxOut(nChange, scriptChange));
+                        // Insert change txn at random position:
+                        vector<CTxOut>::iterator position = wtxNew.vout.begin()+GetRandInt(wtxNew.vout.size()+1);
+                        wtxNew.vout.insert(position, CTxOut(nChange, scriptChange));
+                    }else{
+                        // Insert change txn at random position:
+                        vector<CTxOut>::iterator position = wtxNew.vout.begin()+GetRandInt(wtxNew.vout.size()+1);
+                        wtxNew.vout.insert(position, CTxOut(nChange, scriptChange));
+                    }
+
                 }
                 else
                     reservekey.ReturnKey();
@@ -1545,11 +1589,19 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     return true;
 }
 
-bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
+bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl, bool IsFnPayment)
 {
     vector< pair<CScript, int64_t> > vecSend;
     vecSend.push_back(make_pair(scriptPubKey, nValue));
-    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
+
+    if(IsFnPayment && vecSend.size() != 1){
+        return false;
+    } else if(IsFnPayment && vecSend.size() == 1){
+        return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl, IsFnPayment);
+    }else{
+        return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
+    }
+
 }
 
 uint64_t CWallet::GetStakeWeight() const
@@ -1737,18 +1789,92 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
         nCredit += nReward;
     }
+	
+	///TODO: Starts
+	// Fundamentalnode Payments
+    int payments = 1;
+    // start fundamentalnode payments
+    bool bFundamentalNodePayment = false; // note was false, set true to test
 
-    if (nCredit >= GetStakeSplitThreshold())
+    if ( Params().NetworkID() == CChainParams::TESTNET ){
+        if (GetTime() > START_FUNDAMENTALNODE_PAYMENTS_TESTNET ){
+            bFundamentalNodePayment = true;
+        }
+    }else{
+        if (GetTime() > START_FUNDAMENTALNODE_PAYMENTS){
+            bFundamentalNodePayment = false;
+        }
+    }
+
+    CScript payee;
+    CTxIn vin;
+    bool hasPayment = true;
+    if( bFundamentalNodePayment) {
+        //spork
+        if(!fundamentalnodePayments.GetBlockPayee(pindexPrev->nHeight+1, payee)){
+            CFundamentalnode* winningNode = fnmanager.GetCurrentFundamentalNode(1);
+            if(winningNode){
+                payee.SetDestination(winningNode->pubkey.GetID());
+            } else {
+                return LogPrintf("CreateCoinStake: Failed to detect fundamentalnode to pay\n");
+            }
+        }
+    } else {
+		hasPayment = false;
+	}
+
+    if(hasPayment){
+        payments = txNew.vout.size() + 1;
+        txNew.vout.resize(payments);
+
+        txNew.vout[payments-1].scriptPubKey = payee;
+        txNew.vout[payments-1].nValue = 0;
+
+        CTxDestination address1;
+        ExtractDestination(payee, address1);
+        CBitcoinAddress address2(address1);
+
+        LogPrintf("Fundamentalnode payment to %s\n", address2.ToString().c_str());
+    }
+
+    int64_t blockValue = nCredit;
+    int64_t fundamentalnodePayment = GetFundamentalnodePayment(pindexPrev->nHeight+1, blockValue);
+	
+	if (nCredit >= GetStakeSplitThreshold())
         txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey)); //split stake
+	
+	 // Set output amount
+    if (!hasPayment && txNew.vout.size() == 3) // 2 stake outputs, stake was split, no fundamentalnode payment
+    {
+        txNew.vout[1].nValue = (blockValue / CENT) * CENT;
+        txNew.vout[2].nValue = blockValue - txNew.vout[1].nValue;
+    }
+    else if(hasPayment && txNew.vout.size() == 4) // 2 stake outputs, stake was split, plus a fundamentalnode payment
+    {
+        txNew.vout[payments-1].nValue = fundamentalnodePayment;
+        blockValue -= fundamentalnodePayment;
+        txNew.vout[1].nValue = (blockValue / 2 / CENT) * CENT;
+        txNew.vout[2].nValue = blockValue - txNew.vout[1].nValue;
+    }
+    else if(!hasPayment && txNew.vout.size() == 2) // only 1 stake output, was not split, no fundamentalnode payment
+        txNew.vout[1].nValue = blockValue;
+    else if(hasPayment && txNew.vout.size() == 3) // only 1 stake output, was not split, plus a fundamentalnode payment
+    {
+        txNew.vout[payments-1].nValue = fundamentalnodePayment;
+        blockValue -= fundamentalnodePayment;
+        txNew.vout[1].nValue = blockValue;
+    } 
+	///TODO: ends
 
-    // Set output amount
+
+    /* // Set output amount
     if (txNew.vout.size() == 3)
     {
         txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
         txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
     }
     else
-        txNew.vout[1].nValue = nCredit;
+        txNew.vout[1].nValue = nCredit; */
 
     // Sign
     int nIn = 0;
@@ -2360,6 +2486,45 @@ void CWallet::UpdatedTransaction(const uint256 &hashTx)
             NotifyTransactionChanged(this, hashTx, CT_UPDATED);
     }
 }
+
+
+// TODO: find best way to do it.
+void CWallet::LockCoin(COutPoint& output)
+{
+    AssertLockHeld(cs_wallet); // setLockedCoins
+    setLockedCoins.insert(output);
+}
+
+void CWallet::UnlockCoin(COutPoint& output)
+{
+    AssertLockHeld(cs_wallet); // setLockedCoins
+    setLockedCoins.erase(output);
+}
+
+void CWallet::UnlockAllCoins()
+{
+    AssertLockHeld(cs_wallet); // setLockedCoins
+    setLockedCoins.clear();
+}
+
+bool CWallet::IsLockedCoin(uint256 hash, unsigned int n) const
+{
+    AssertLockHeld(cs_wallet); // setLockedCoins
+    COutPoint outpt(hash, n);
+
+    return (setLockedCoins.count(outpt) > 0);
+}
+
+void CWallet::ListLockedCoins(std::vector<COutPoint>& vOutpts)
+{
+    AssertLockHeld(cs_wallet); // setLockedCoins
+    for (std::set<COutPoint>::iterator it = setLockedCoins.begin();
+         it != setLockedCoins.end(); it++) {
+        COutPoint outpt = (*it);
+        vOutpts.push_back(outpt);
+    }
+}
+
 
 void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
     AssertLockHeld(cs_wallet); // mapKeyMetadata

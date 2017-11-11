@@ -117,6 +117,8 @@ void SendCoinsDialog::on_sendButton_clicked()
     if(!model || !model->getOptionsModel())
         return;
 
+    bool IsFundamentNodePayment = false;
+
     QList<SendCoinsRecipient> recipients;
     bool valid = true;
 
@@ -171,10 +173,23 @@ void SendCoinsDialog::on_sendButton_clicked()
 
     WalletModel::SendCoinsReturn sendstatus;
 
-    if (!model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures())
-        sendstatus = model->sendCoins(recipients);
-    else
-        sendstatus = model->sendCoins(recipients, CoinControlDialog::coinControl);
+    if(ui->checkBoxFnPayment->isChecked()){
+        IsFundamentNodePayment = true;
+    }
+
+    if(IsFundamentNodePayment){
+        if (!model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures()){
+                sendstatus = model->sendCoins(recipients, NULL, true);
+        }
+        else{
+                sendstatus = model->sendCoins(recipients, CoinControlDialog::coinControl, true);
+        }
+    } else {
+        if (!model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures())
+            sendstatus = model->sendCoins(recipients);
+        else
+            sendstatus = model->sendCoins(recipients, CoinControlDialog::coinControl);
+    }
 
     switch(sendstatus.status)
     {

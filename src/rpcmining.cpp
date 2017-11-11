@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "rpcserver.h"
+#include "base58.h"//
 #include "chainparams.h"
 #include "main.h"
 #include "db.h"
@@ -505,7 +506,14 @@ Value getblocktemplate(const Array& params, bool fHelp)
             "  \"sizelimit\" : limit of block size\n"
             "  \"bits\" : compressed target of next block\n"
             "  \"height\" : height of the next block\n"
-            "See https://en.bitcoin.it/wiki/BIP_0022 for full specification.");
+            "  \"payee\" : \"xxx\",                (string) required payee for the next block\n"
+            "  \"payee_amount\" : n,               (numeric) required amount to pay\n"
+            "  \"votes\" : [\n                     (array) show vote candidates\n"
+            "        { ... }                       (json object) vote candidate\n"
+            "        ,...\n"
+            "  ],\n"
+            "  \"fundamentalnode_payments\" : true|false,         (boolean) true, if fundamentalnode payments are enabled"
+            "  \"enforce_fundamentalnode_payments\" : true|false  (boolean) true, if fundamentalnode payments are enforced");
 
     std::string strMode = "template";
     if (params.size() > 0)
@@ -623,13 +631,15 @@ Value getblocktemplate(const Array& params, bool fHelp)
         aMutable.push_back("transactions");
         aMutable.push_back("prevblock");
     }
+	
+	Array aVotes;
 
     Object result;
     result.push_back(Pair("version", pblock->nVersion));
     result.push_back(Pair("previousblockhash", pblock->hashPrevBlock.GetHex()));
     result.push_back(Pair("transactions", transactions));
     result.push_back(Pair("coinbaseaux", aux));
-    result.push_back(Pair("coinbasevalue", (int64_t)pblock->vtx[0].vout[0].nValue));
+    result.push_back(Pair("coinbasevalue", (int64_t)pblock->vtx[0].GetValueOut()));
     result.push_back(Pair("target", hashTarget.GetHex()));
     result.push_back(Pair("mintime", (int64_t)pindexPrev->GetPastTimeLimit()+1));
     result.push_back(Pair("mutable", aMutable));
@@ -639,6 +649,31 @@ Value getblocktemplate(const Array& params, bool fHelp)
     result.push_back(Pair("curtime", (int64_t)pblock->nTime));
     result.push_back(Pair("bits", strprintf("%08x", pblock->nBits)));
     result.push_back(Pair("height", (int64_t)(pindexPrev->nHeight+1)));
+	result.push_back(Pair("votes", aVotes));
+
+
+    if(pblock->payee != CScript()){
+        CTxDestination address1;
+        ExtractDestination(pblock->payee, address1);
+        CBitcoinAddress address2(address1);
+        result.push_back(Pair("payee", address2.ToString().c_str()));
+        result.push_back(Pair("payee_amount", (int64_t)GetFundamentalnodePayment(pindexPrev->nHeight+1, pblock->vtx[0].GetValueOut())));
+    } else {
+        result.push_back(Pair("payee", ""));
+        result.push_back(Pair("payee_amount", ""));
+    }
+
+    bool FundamentalnodePayments = false;
+
+    if(TestNet()){
+        if(pblock->nTime > START_FUNDAMENTALNODE_PAYMENTS_TESTNET) FundamentalnodePayments = true;
+    } else {
+        if(pblock->nTime > START_FUNDAMENTALNODE_PAYMENTS) FundamentalnodePayments = true;
+    }
+
+
+    result.push_back(Pair("fundamentalnode_payments", FundamentalnodePayments));
+    result.push_back(Pair("enforce_fundamentalnode_payments", true));
 
     return result;
 }

@@ -66,6 +66,19 @@ namespace boost {
 
 using namespace std;
 
+//Bitsend only features
+bool fFundamentalNode = false;
+string strFundamentalNodePrivKey = "";
+string strFundamentalNodeAddr = "";
+bool fProUserMode = false;
+bool fProMode = false;
+/** Spork enforcement enabled time */
+int64_t enforceFundamentalnodePaymentsTime = 4085657524;//TODO: change it 
+int nFundamentalnodeMinProtocol = 0;
+bool fSucessfullyLoaded = false;
+
+
+
 map<string, string> mapArgs;
 map<string, vector<string> > mapMultiArgs;
 bool fDebug = false;
@@ -1023,12 +1036,25 @@ boost::filesystem::path GetConfigFile()
     return pathConfigFile;
 }
 
+boost::filesystem::path GetFundamentalnodeConfigFile()
+{
+    boost::filesystem::path pathConfigFile(GetArg("-fnconf", "fundamentalnode.conf"));
+    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir() / pathConfigFile;
+    return pathConfigFile;
+}
+
 void ReadConfigFile(map<string, string>& mapSettingsRet,
                     map<string, vector<string> >& mapMultiSettingsRet)
 {
     boost::filesystem::ifstream streamConfig(GetConfigFile());
-    if (!streamConfig.good())
-        return; // No bitcoin.conf file is OK
+    if (!streamConfig.good()){
+        // Create empty bitsend.conf if it does not excist
+        FILE* configFile = fopen(GetConfigFile().string().c_str(), "a");
+        if (configFile != NULL)
+            fclose(configFile);
+        return; // Nothing to read, so just return
+    }
+        
 
     set<string> setOptions;
     setOptions.insert("*");

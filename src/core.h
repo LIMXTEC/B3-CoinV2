@@ -12,6 +12,12 @@
 
 #include <stdio.h>
 
+#define START_FUNDAMENTALNODE_PAYMENTS_TESTNET 1510297657
+#define START_FUNDAMENTALNODE_PAYMENTS 1510297657
+
+
+
+
 class CTransaction;
 
 /** An outpoint - a combination of a transaction hash and an index n into its vout */
@@ -44,8 +50,12 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10), n);
+        return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,64), n);
     }
+	void print() const
+	{
+		LogPrintf("%s\n", ToString());
+	}
 };
 
 /** An inpoint - a combination of a transaction and an index n into its vin */
@@ -70,6 +80,7 @@ class CTxIn
 public:
     COutPoint prevout;
     CScript scriptSig;
+	CScript prevPubKey;
     unsigned int nSequence;
 
     CTxIn()
@@ -113,6 +124,11 @@ public:
     friend bool operator!=(const CTxIn& a, const CTxIn& b)
     {
         return !(a == b);
+    }
+	
+	friend bool operator<(const CTxIn& a, const CTxIn& b)
+    {
+        return a.prevout<b.prevout;
     }
 
     std::string ToString() const

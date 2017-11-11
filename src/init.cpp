@@ -10,6 +10,15 @@
 #include "rpcserver.h"
 #include "net.h"
 #include "util.h"
+
+
+#include "fn-activity.h"//TODO
+#include "fundamentalnode.h"
+#include "fn-manager.h"
+#include "fn-config.h"
+#include "spork.h"
+
+
 #include "ui_interface.h"
 #ifdef ENABLE_WALLET
 #include "wallet.h"
@@ -97,6 +106,7 @@ void Shutdown()
     if (pwalletMain)
         bitdb.Flush(false);
 #endif
+	DumpFundamentalnodes();
     StopNode();
     {
         LOCK(cs_main);
@@ -221,6 +231,15 @@ std::string HelpMessage()
     strUsage += "  -printtoconsole        " + _("Send trace/debug info to console instead of debug.log file") + "\n";
     strUsage += "  -regtest               " + _("Enter regression test mode, which uses a special chain in which blocks can be "
                                                 "solved instantly. This is intended for regression testing tools and app development.") + "\n";
+												
+	strUsage += "\n" + _("Fundamentalnode options:") + "\n";
+    strUsage += "  -fundamentalnode=<n>            " + _("Enable the client to act as a fundamentalnode (0-1, default: 0)") + "\n";
+    strUsage += "  -fnconf=<file>             " + _("Specify fundamentalnode configuration file (default: fundamentalnode.conf)") + "\n";
+    strUsage += "  -fnconflock=<n>            " + _("Lock fundamentalnodes from fundamentalnode configuration file (default: 1)") + "\n";
+    strUsage += "  -fundamentalnodeprivkey=<n>     " + _("Set the fundamentalnode private key") + "\n";
+    strUsage += "  -fundamentalnodeaddr=<n>        " + _("Set external address:port to get to this fundamentalnode (example: address:port)") + "\n";
+    strUsage += "  -fundamentalnodeminprotocol=<n> " + _("Ignore fundamentalnodes less than version (example: 70050; default : 0)") + "\n";
+	
     strUsage += "  -rpcuser=<user>        " + _("Username for JSON-RPC connections") + "\n";
     strUsage += "  -rpcpassword=<pw>      " + _("Password for JSON-RPC connections") + "\n";
     strUsage += "  -rpcport=<port>        " + _("Listen for JSON-RPC connections on <port> (default: 15715 or testnet: 25715)") + "\n";
@@ -348,6 +367,10 @@ bool AppInit2(boost::thread_group& threadGroup)
         if (SoftSetBoolArg("-listen", true))
             LogPrintf("AppInit2 : parameter interaction: -bind set -> setting -listen=1\n");
     }
+	
+	// parse conf file for multi fundamental node entries
+    std::string strErr;
+    fundamentalnodeConfig.read(strErr);
 
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0) {
         // when only connecting to trusted nodes, do not seed via DNS, or listen by default
@@ -477,6 +500,17 @@ bool AppInit2(boost::thread_group& threadGroup)
 
     if (fDaemon)
         fprintf(stdout, "B3-Coin server starting\n");
+	//TODO: Starts improvement
+	if (mapArgs.count("-fundamentalnodepaymentskey")) // fundamentalnode payments priv key
+    {
+        if (!fundamentalnodePayments.SetPrivKey(GetArg("-fundamentalnodepaymentskey", "")))
+            return InitError(_("Unable to sign fundamentalnode payment winner, wrong key?"));
+        if (!sporkManager.SetPrivKey(GetArg("-fundamentalnodepaymentskey", "")))
+            return InitError(_("Unable to sign spork message, wrong key?"));
+    }
+
+    //ignore fundamentalnodes below protocol version
+    nFundamentalnodeMinProtocol = GetArg("-fundamentalnodeminprotocol", MIN_PEER_PROTO_VERSION);
 
     int64_t nStart;
 
@@ -788,7 +822,90 @@ bool AppInit2(boost::thread_group& threadGroup)
     }
     threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
 
-    // ********************************************************* Step 10: load peers
+	/**TODO:*/
+    // ********************************************************* Step 10: Fundamentalnode
+
+    //string strNode = "23.23.186.131";
+    //CAddress addr;
+    //ConnectNode(addr, strNode.c_str(), true);
+
+    //string strNode = "23.23.186.131";
+    //CAddress addr;
+    //ConnectNode(addr, strNode.c_str(), true);
+
+    uiInterface.InitMessage(_("Loading fundamentalnode cache..."));
+
+    CFundamentalnodeDB fndb;
+    CFundamentalnodeDB::ReadResult readResult = fndb.Read(fnmanager);
+    if (readResult == CFundamentalnodeDB::FileError)
+        LogPrintf("Missing fundamentalnode cache file - fncache.dat, will try to recreate\n");
+    else if (readResult != CFundamentalnodeDB::Ok)
+    {
+        LogPrintf("Error reading fncache.dat: ");
+        if(readResult == CFundamentalnodeDB::IncorrectFormat)
+            LogPrintf("magic is ok but data has invalid format, will try to recreate\n");
+        else
+            LogPrintf("file format is unknown or invalid, please fix it manually\n");
+    }
+
+    fFundamentalNode = GetBoolArg("-fundamentalnode", false);
+    if(fFundamentalNode) {
+        LogPrintf("FUNDAMENTAL NODE\n");
+        strFundamentalNodeAddr = GetArg("-fundamentalnodeaddr", "");
+
+        LogPrintf(" addr %s\n", strFundamentalNodeAddr.c_str());
+
+        if(!strFundamentalNodeAddr.empty()){
+            CService addrTest = CService(strFundamentalNodeAddr);
+            if (!addrTest.IsValid()) {
+                return InitError("Invalid -fundamentalnodeaddr address: " + strFundamentalNodeAddr);
+            }
+        }
+
+        strFundamentalNodePrivKey = GetArg("-fundamentalnodeprivkey", "");
+        if(!strFundamentalNodePrivKey.empty()){
+            std::string errorMessage;
+
+            CKey key;
+            CPubKey pubkey;
+
+            if(!fnSigner.SetKey(strFundamentalNodePrivKey, errorMessage, key, pubkey))
+            {
+                return InitError(_("Invalid fundamentalnodeprivkey. Please see documenation."));
+            }
+
+            activeFundamentalnode.pubKeyFundamentalnode = pubkey;
+
+        } else {
+            return InitError(_("You must specify a fundamentalnodeprivkey in the configuration. Please see documentation for help."));
+        }
+    }
+    if(GetBoolArg("-fnconflock", true)) {
+        LogPrintf("Locking Fundamentalnodes:\n");
+        uint256 fnTxHash;
+        BOOST_FOREACH(CFundamentalnodeConfig::CFundamentalnodeEntry fne, fundamentalnodeConfig.getEntries()) {
+            LogPrintf("  %s %s\n", fne.getTxHash(), fne.getOutputIndex());
+            fnTxHash.SetHex(fne.getTxHash());
+            COutPoint outpoint = COutPoint(fnTxHash, boost::lexical_cast<unsigned int>(fne.getOutputIndex()));
+            pwalletMain->LockCoin(outpoint);
+        }
+    }
+
+	//-ProMode 
+    fProUserMode = GetBoolArg("-promode", false); //BitSenddev 
+	fProMode = GetBoolArg("-fpromode", false);  // BitSenddev
+    if((fFundamentalNode && !fProUserMode) || (fFundamentalNode && fProMode)){
+        return InitError("You can not start a fundamentalnode in -promode=0 or -fpromode=1");
+    } //BitSenddev 13-05-2016
+
+    LogPrintf("fProUserMode -promode %d # ", fProUserMode);
+    LogPrintf("fProMode -fpromode  %d  #", fProMode);
+
+    fnSigner.InitCollateralAddress();
+	
+    threadGroup.create_thread(boost::bind(&ThreadBitPool)); 
+
+    // ********************************************************* Step 11: load peers
 
     uiInterface.InitMessage(_("Loading addresses..."));
 
@@ -803,7 +920,7 @@ bool AppInit2(boost::thread_group& threadGroup)
     LogPrintf("Loaded %i addresses from peers.dat  %dms\n",
            addrman.size(), GetTimeMillis() - nStart);
 
-    // ********************************************************* Step 11: start node
+    // ********************************************************* Step 12: start node
 
     if (!CheckDiskSpace())
         return false;
@@ -838,7 +955,7 @@ bool AppInit2(boost::thread_group& threadGroup)
         threadGroup.create_thread(boost::bind(&ThreadStakeMiner, pwalletMain));
 #endif
 
-    // ********************************************************* Step 12: finished
+    // ********************************************************* Step 13: finished
 
     uiInterface.InitMessage(_("Done loading"));
 

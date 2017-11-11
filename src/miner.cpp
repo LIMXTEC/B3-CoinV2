@@ -8,6 +8,9 @@
 #include "miner.h"
 #include "kernel.h"
 
+#include "fn-manager.h"
+#include "fn-activity.h"
+
 using namespace std;
 
 //////////////////////////////////////////////////////////////////////////////
@@ -110,6 +113,7 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, bool fProofOfStake, int64_t* pFe
     int nHeight = pindexPrev->nHeight + 1;
 
     // Create coinbase tx
+	int payments = 1;
     CTransaction txNew;
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
@@ -130,6 +134,51 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, bool fProofOfStake, int64_t* pFe
 
         txNew.vout[0].SetEmpty();
     }
+
+    /***TODO: Start*/
+    // start fundamentalnode payments
+    bool bFundamentalNodePayment = false;
+
+    if ( Params().NetworkID() == CChainParams::TESTNET ){
+        if (GetTimeMicros() > START_FUNDAMENTALNODE_PAYMENTS_TESTNET ){
+            bFundamentalNodePayment = true;
+        }
+    }else{
+        if (GetTimeMicros() > START_FUNDAMENTALNODE_PAYMENTS){
+            bFundamentalNodePayment = true;
+        }
+    }//
+   ///TODO: ends
+   ///
+    ///TODO: Starts
+    if(bFundamentalNodePayment && !fProofOfStake) {
+        bool hasPayment = true;
+        //spork
+        if(!fundamentalnodePayments.GetBlockPayee(pindexPrev->nHeight+1, pblock->payee)){
+            //no fundamentalnode detected
+            CFundamentalnode* winningNode = fnmanager.GetCurrentFundamentalNode(1);
+            if(winningNode){
+                pblock->payee.SetDestination(winningNode->pubkey.GetID());
+            } else {
+                LogPrintf("CreateNewBlock: Failed to detect fundamentalnode to pay\n");
+                hasPayment = false;
+            }
+        }
+
+        if(hasPayment){
+            payments++;
+            txNew.vout.resize(payments);
+
+            txNew.vout[payments-1].scriptPubKey = pblock->payee;
+            txNew.vout[payments-1].nValue = 0;
+
+            CTxDestination address1;
+            ExtractDestination(pblock->payee, address1);
+            CBitcoinAddress address2(address1);
+
+            LogPrintf("Fundamentalnode payment to %s\n", address2.ToString().c_str());
+        }
+    }///TODO: ends
 
     // Add our coinbase tx as first transaction
     pblock->vtx.push_back(txNew);
@@ -159,12 +208,16 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, bool fProofOfStake, int64_t* pFe
         ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
 
     pblock->nBits = GetNextTargetRequired(pindexPrev, fProofOfStake);
+	
 
     // Collect memory pool transactions into the block
     int64_t nFees = 0;
     {
         LOCK2(cs_main, mempool.cs);
         CTxDB txdb("r");
+		
+
+
 
         // Priority order to process transactions
         list<COrphan> vOrphan; // list memory doesn't move
@@ -300,7 +353,18 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, bool fProofOfStake, int64_t* pFe
             if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
                 continue;
 
-            int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
+            int64_t nTxFees = 0;
+
+            //check if fundamental node payment
+            if((tx.GetValueIn(mapInputs)-tx.GetValueOut()) >= FUNDAMENTALNODEAMOUNT ){
+                nTxFees = tx.GetValueIn(mapInputs) - FUNDAMENTALNODEAMOUNT - tx.GetValueOut();
+                //LogPrintf("CreateNewBlock : Funamental Transaction nTxFees = %d, tx.GetValueOut() = %d, tx.GetValueIn(mapInputs) = %d", nTxFees, tx.GetValueOut(), tx.GetValueIn(mapInputs));
+            } else{
+                nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
+                //LogPrintf("CreateNewBlock : Not a Funamental Transaction, nTxFees = %d , Input = %d, Output = %d", nTxFees, tx.GetValueIn(mapInputs), tx.GetValueOut());
+            }
+
+            //tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
                 continue;
 
@@ -353,9 +417,20 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, bool fProofOfStake, int64_t* pFe
 
         if (fDebug && GetBoolArg("-printpriority", false))
             LogPrintf("CreateNewBlock(): total size %u\n", nBlockSize);
+		
+        int64_t blockValue = GetProofOfWorkReward(  nFees, pindexPrev->nHeight+1);
+        int64_t fundamentalnodePayment = GetFundamentalnodePayment(pindexPrev->nHeight+1, blockValue);
 
-        if (!fProofOfStake)
-            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees, pindexPrev->nHeight+1);
+        if (!fProofOfStake){
+            //create fundamentalnode payment
+			if(payments > 1){
+				pblock->vtx[0].vout[payments-1].nValue = fundamentalnodePayment;
+				blockValue -= fundamentalnodePayment;
+			    LogPrintf("Debug miner.cpp 375 blockValue %u\n", blockValue);
+			    LogPrintf("Debug main.cpp 375 fundamentalnodePayment %u\n", fundamentalnodePayment);
+			}
+			pblock->vtx[0].vout[0].nValue = blockValue;
+		}
 
         if (pFees)
             *pFees = nFees;
@@ -452,7 +527,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     //// debug print
     LogPrintf("CheckWork() : new proof-of-work block found  \n  proof hash: %s  \ntarget: %s\n", hashProof.GetHex(), hashTarget.GetHex());
     LogPrintf("%s\n", pblock->ToString());
-    LogPrintf("generated %s\n", FormatMoney(pblock->vtx[0].vout[0].nValue));
+    LogPrintf("generated %s\n", FormatMoney(pblock->vtx[0].GetValueOut()));
 
     // Found a solution
     {
@@ -543,11 +618,20 @@ void ThreadStakeMiner(CWallet *pwallet)
         if (fTryToSync)
         {
             fTryToSync = false;
-            if (vNodes.size() < 3 || pindexBest->GetBlockTime() < GetTime() - 10 * 60)
-            {
-                MilliSleep(60000);
-                continue;
+            if ( Params().NetworkID() == CChainParams::TESTNET ){
+                if (vNodes.size() < 1 )
+                {
+                    MilliSleep(60000);
+                    continue;
+                }
+            } else{
+                if (vNodes.size() < 3 || pindexBest->GetBlockTime() < GetTime() - 10 * 60)
+                {
+                    MilliSleep(60000);
+                    continue;
+                }
             }
+
         }
 
         //

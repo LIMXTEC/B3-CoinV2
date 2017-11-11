@@ -6,6 +6,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "init.h"
+#include "fn-config.h"
 #include <boost/algorithm/string/predicate.hpp>
 
 void WaitForShutdown(boost::thread_group* threadGroup)
@@ -77,6 +78,14 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
+		
+		// parse conf file for multi fundamental node entries
+        std::string strErr;
+        if(!fundamentalnodeConfig.read(strErr)) {
+            fprintf(stderr,"Error reading fundamental node configuration file: %s\n", strErr.c_str());
+            return false;
+        }
+		
 #if !defined(WIN32)
         fDaemon = GetBoolArg("-daemon", false);
         if (fDaemon)
