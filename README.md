@@ -1,5 +1,5 @@
 
-B3-Coin development tree
+B3-Coin development tree and this is release branch to be use (v2.0.0.2)
 
 B3-Coin is a PoS-based cryptocurrency.
 
