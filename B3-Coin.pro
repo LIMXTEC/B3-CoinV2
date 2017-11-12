@@ -15,11 +15,13 @@ TEMPLATE = app
 TARGET = b3coin-qt
 VERSION = 2.0.0.2
 INCLUDEPATH += src src/json src/qt
-QT += network
+QT += network 
 DEFINES += ENABLE_WALLET
 DEFINES += BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd
 CONFIG += thread
+
+
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
@@ -27,33 +29,20 @@ greaterThan(QT_MAJOR_VERSION, 4) {
 }
 
 win32 {
-windows:LIBS += -lshlwapi
-LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,)
-LIBS += -lssl -lcrypto -ldb_cxx$$BDB_LIB_SUFFIX
-windows:LIBS += -lws2_32 -lole32 -loleaut32 -luuid -lgdi32
-LIBS += -lboost_system-mgw49-mt-s-1_55 -lboost_filesystem-mgw49-mt-s-1_55 -lboost_program_options-mgw49-mt-s-1_55 -lboost_thread-mgw49-mt-s-1_55
-LIBS += -L"C:/MinGW/msys/1.0/local/lib"
-LIBS += -L"C:/deps/libcommuni-3.2.0/lib"
-LIBS += -L"C:/deps/ibevent-2.0.22/.lib"
-
-INCLUDEPATH += "C:/MinGW/msys/1.0/local/include"
-
-BOOST_LIB_SUFFIX=-mgw49-mt-s-1_55
-BOOST_INCLUDE_PATH=C:/deps/boost_1_55_0
-BOOST_LIB_PATH=C:/deps/boost_1_55_0/stage/lib
-BDB_INCLUDE_PATH=C:/deps/db-4.8.30.NC/build_unix
-BDB_LIB_PATH=C:/deps/db-4.8.30.NC/build_unix
-OPENSSL_INCLUDE_PATH=C:/deps/openssl-1.0.1j/include
-OPENSSL_LIB_PATH=C:/deps/openssl-1.0.1j
-MINIUPNPC_INCLUDE_PATH=C:/deps/
-MINIUPNPC_LIB_PATH=C:/deps/miniupnpc
-LIBPNG_INCLUDE_PATH=d:/deps/libpng-1.6.12
-LIBPNG_LIB_PATH=d:/deps/libpng-1.6.12/.libs
-QRENCODE_INCLUDE_PATH=C:/deps/qrencode-3.4.4
-QRENCODE_LIB_PATH=C:/deps/qrencode-3.4.4/.libs
-GMP_INCLUDE_PATH= C:/deps/gmp-6.0.0
-GMP_LIB_PATH= C:/deps/gmp-6.0.0/.libs
+	BOOST_LIB_SUFFIX=-mgw49-mt-s-1_58
+	BOOST_INCLUDE_PATH=C:/development/dependencies/easywinbuilder/lib/boost_1_58_0
+	BOOST_LIB_PATH=C:/development/dependencies/easywinbuilder/lib/boost_1_58_0/stage/lib
+	BDB_INCLUDE_PATH=C:/development/dependencies/easywinbuilder/lib/db-4.8.30.NC/build_unix
+	BDB_LIB_PATH=C:/development/dependencies/easywinbuilder/lib/db-4.8.30.NC/build_unix
+	OPENSSL_INCLUDE_PATH=C:/development/dependencies/easywinbuilder/lib/openssl-1.0.1p/include
+	OPENSSL_LIB_PATH=C:/development/dependencies/easywinbuilder/lib/openssl-1.0.1p
+	MINIUPNPC_INCLUDE_PATH=C:/development/dependencies/easywinbuilder/lib/miniupnpc-1.9.20150206/miniupnpc
+	MINIUPNPC_LIB_PATH=C:/development/dependencies/easywinbuilder/lib/miniupnpc-1.9.20150206/miniupnpc
+	MINIUPNP_STATICLIB=C:/development/dependencies/easywinbuilder/lib/miniupnpc-1.9.20150206/miniupnpc
+	QRENCODE_INCLUDE_PATH=C:/deps/qrencode-3.4.4
+	QRENCODE_LIB_PATH=C:/deps/qrencode-3.4.4/.libs
 } 
+
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
 # for boost thread win32 with _win32 sufix
@@ -71,9 +60,9 @@ UI_DIR = build
 # use: qmake "RELEASE=1"
 contains(RELEASE, 1) {
     # Mac: compile for maximum compatibility (10.5, 32-bit)
-    macx:QMAKE_CXXFLAGS += -mmacosx-version-min=10.6 -arch i386 -isysroot /Developer/SDKs/MacOSX10.6.sdk
-    macx:QMAKE_CFLAGS += -mmacosx-version-min=10.6 -arch i386 -isysroot /Developer/SDKs/MacOSX10.6.sdk
-    macx:QMAKE_OBJECTIVE_CFLAGS += -mmacosx-version-min=10.6 -arch i386 -isysroot /Developer/SDKs/MacOSX10.6.sdk
+    macx:QMAKE_CXXFLAGS += -mmacosx-version-min=10.12 -arch i386 -isysroot /Developer/SDKs/MacOSX10.12.sdk
+    macx:QMAKE_CFLAGS += -mmacosx-version-min=10.12 -arch i386 -isysroot /Developer/SDKs/MacOSX10.12.sdk
+    macx:QMAKE_OBJECTIVE_CFLAGS += -mmacosx-version-min=10.12 -arch i386 -isysroot /Developer/SDKs/MacOSX10.12.sdk
 
     !windows:!macx {
         # Linux: static link
@@ -82,6 +71,12 @@ contains(RELEASE, 1) {
 }
 
 !win32 {
+MINIUPNPC_INCLUDE_PATH = /usr/local/miniupnpc/include
+MINIUPNPC_LIB_PATH = /usr/local/miniupnpc/lib
+#OPENSSL_INCLUDE_PATH=usr/local/opt/openssl/include
+#OPENSSL_LIB_PATH=usr/local/opt/openssl/lib
+#macx:LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,)
+
 # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
 QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
@@ -111,13 +106,14 @@ contains(USE_UPNP, -) {
     message(Building without UPNP support)
 } else {
     message(Building with UPNP support)
-    count(USE_UPNP, 0) {
-        USE_UPNP=1
-    }
-    DEFINES += USE_UPNP=$$USE_UPNP STATICLIB
-    INCLUDEPATH += $$MINIUPNPC_INCLUDE_PATH
-    LIBS += $$join(MINIUPNPC_LIB_PATH,,-L,) -lminiupnpc
-    win32:LIBS += -liphlpapi
+    #count(USE_UPNP, 0) {
+        #USE_UPNP=1
+    #}
+    #DEFINES += USE_UPNP=$$USE_UPNP STATICLIB
+    I#NCLUDEPATH += /usr/local/miniupnpc/include
+    #MINIUPNPC_LIB_PATH = /usr/local/miniupnpc/lib
+    #LIBS += $$join(MINIUPNPC_LIB_PATH,,-L,) -lminiupnpc
+    #win32:LIBS += -liphlpapi
 }
 
 # use: qmake "USE_DBUS=1" or qmake "USE_DBUS=0"
@@ -137,7 +133,13 @@ contains(BITCOIN_NEED_QT_PLUGINS, 1) {
 
 INCLUDEPATH += src/leveldb/include src/leveldb/helpers
 LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
-SOURCES += src/txdb-leveldb.cpp
+SOURCES += src/txdb-leveldb.cpp \
+    src/fundamentalnode.cpp \
+    src/fn-activity.cpp \
+    src/fn-service.cpp \
+    src/fn-config.cpp \
+    src/fn-manager.cpp
+
 !win32 {
     # we use QMAKE_CXXFLAGS_RELEASE even without RELEASE=1 because we use RELEASE to indicate linking preferences not -O preferences
     genleveldb.commands = cd $$PWD/src/leveldb && CC=$$QMAKE_CC CXX=$$QMAKE_CXX $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
@@ -272,7 +274,14 @@ HEADERS += src/qt/bitcoingui.h \
     src/netbase.h \
     src/clientversion.h \
     src/threadsafety.h \
-    src/tinyformat.h
+    src/tinyformat.h \
+    src/signhelper_mn.h \
+    src/spork.h \
+    src/fundamentalnode.h \
+    src/fn-activity.h \
+    src/fn-service.h \
+    src/fn-config.h \
+    src/fn-manager.h
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -287,6 +296,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/alert.cpp \
+    src/addrman.cpp \
     src/chainparams.cpp \
     src/version.cpp \
     src/sync.cpp \
@@ -302,7 +312,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/init.cpp \
     src/net.cpp \
     src/checkpoints.cpp \
-    src/addrman.cpp \
     src/db.cpp \
     src/walletdb.cpp \
     src/qt/clientmodel.cpp \
@@ -349,7 +358,10 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt-x86.S \
     src/scrypt-x86_64.S \
     src/scrypt.cpp \
-    src/pbkdf2.cpp
+    src/pbkdf2.cpp \
+    src/rpcfundamentalnode.cpp \
+    src/bitpool.cpp \
+    src/spork.cpp
 
 RESOURCES += \
     src/qt/bitcoin.qrc
@@ -398,6 +410,14 @@ OTHER_FILES += \
     doc/*.rst doc/*.txt doc/README README.md res/bitcoin-qt.rc
 
 # platform specific defaults, if not overridden on command line
+isEmpty(OPENSSL_LIB_PATH) {
+    macx:OPENSSL_LIB_PATH = /usr/local/opt/openssl/lib
+}
+
+isEmpty(OPENSSL_INCLUDE_PATH) {
+    macx:OPENSSL_INCLUDE_PATH = /usr/local/opt/openssl/include
+}
+
 isEmpty(BOOST_LIB_SUFFIX) {
     macx:BOOST_LIB_SUFFIX = -mt
     windows:BOOST_LIB_SUFFIX = -mgw49-mt-s-1_57
@@ -408,7 +428,7 @@ isEmpty(BOOST_THREAD_LIB_SUFFIX) {
 }
 
 isEmpty(BDB_LIB_PATH) {
-    macx:BDB_LIB_PATH = /opt/local/lib/db48
+    macx:BDB_LIB_PATH = /usr/local/opt/berkeley-db@4/lib
 }
 
 isEmpty(BDB_LIB_SUFFIX) {
@@ -416,15 +436,15 @@ isEmpty(BDB_LIB_SUFFIX) {
 }
 
 isEmpty(BDB_INCLUDE_PATH) {
-    macx:BDB_INCLUDE_PATH = /opt/local/include/db48
+    macx:BDB_INCLUDE_PATH = /usr/local/opt/berkeley-db@4/include
 }
 
 isEmpty(BOOST_LIB_PATH) {
-    macx:BOOST_LIB_PATH = /opt/local/lib
+    macx:BOOST_LIB_PATH = /usr/local/opt/boost/lib
 }
 
 isEmpty(BOOST_INCLUDE_PATH) {
-    macx:BOOST_INCLUDE_PATH = /opt/local/include
+    macx:BOOST_INCLUDE_PATH = /usr/local/opt/boost/include
 }
 
 windows:DEFINES += WIN32
@@ -446,7 +466,7 @@ macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm
 macx:LIBS += -framework Foundation -framework ApplicationServices -framework AppKit
 macx:DEFINES += MAC_OSX MSG_NOSIGNAL=0
 macx:ICON = src/qt/res/icons/bitcoin.icns
-macx:TARGET = "BitBoSS-Qt"
+macx:TARGET = "B3Coin-Qt"
 macx:QMAKE_CFLAGS_THREAD += -pthread
 macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
@@ -473,3 +493,6 @@ contains(RELEASE, 1) {
 }
 
 system($$QMAKE_LRELEASE -silent $$_PRO_FILE_)
+
+DISTFILES += \
+    src/qt/res/about.png

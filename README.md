@@ -1,10 +1,11 @@
 
 B3-Coin development tree
 
-B3-Coin is a PoS-based cryptocurrency.
+B3-Coin is a PoS-based and Proof-Of-Trust(Burnt/Fundamental Nodes) cryptocurrency.
 
 Development process
 ===========================
+# Warning: This branch is highly experimental, please use release branch for services purposes (v2.0)
 
 Developers work in their own trees, then submit pull requests when
 they think their feature or bug fix is ready.

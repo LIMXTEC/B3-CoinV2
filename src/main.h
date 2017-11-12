@@ -135,6 +135,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int nHeight);
 int64_t GetProofOfStakeReward(const CBlockIndex* pindexPrev, int64_t nCoinAge, int64_t nFees, int nHeight);
+int64_t GetFundamentalnodePayment(int nHeight, int64_t blockValue);//pass nHeight also due to future forks
 bool IsInitialBlockDownload();
 bool IsConfirmedInNPrevBlocks(const CTxIndex& txindex, const CBlockIndex* pindexFrom, int nMaxDepth, int& nActualDepth);
 std::string GetWarnings(std::string strFor);
@@ -150,7 +151,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool fLimitFree,
 
 
 
+bool AcceptableFundamentalTxn(CTxMemPool& pool, CTransaction &tx, bool ignoreFees=true);
 
+int GetInputAge(CTxIn& vin);
 
 
 
@@ -595,6 +598,7 @@ public:
     std::vector<unsigned char> vchBlockSig;
 
     // memory only
+	mutable CScript payee;
     mutable std::vector<uint256> vMerkleTree;
 
     // Denial-of-service detection:
@@ -831,6 +835,12 @@ public:
 
 
     bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
+	/** Find a conflicting transcation in a block and disconnect all up to that point **/
+	bool DisconnectBlockAndInputs(CTransaction txLock);
+	
+	// reprocess a number of blocks to try and get on the correct chain again
+	bool DisconnectBlocksAndReprocess(int blocks);
+	
     bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
