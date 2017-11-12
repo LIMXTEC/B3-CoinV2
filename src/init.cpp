@@ -368,9 +368,6 @@ bool AppInit2(boost::thread_group& threadGroup)
             LogPrintf("AppInit2 : parameter interaction: -bind set -> setting -listen=1\n");
     }
 	
-	// parse conf file for multi fundamental node entries
-    std::string strErr;
-    fundamentalnodeConfig.read(strErr);
 
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0) {
         // when only connecting to trusted nodes, do not seed via DNS, or listen by default

@@ -53,7 +53,7 @@ bool CFundamentalnodeConfig::read(std::string& strErr) {
         }
 
         if(Params().NetworkID() == CChainParams::MAIN){
-            if(CService(ip).GetPort() != 30420) {
+            if(CService(ip).GetPort() != 5647) {
                 strErr = "Invalid port detected in fundamentalnode.conf: " + line + " (must be 5647 for mainnet)";
                 streamConfig.close();
                 return false;

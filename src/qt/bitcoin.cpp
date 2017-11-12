@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
     if(!fundamentalnodeConfig.read(strErr)) {
         QMessageBox::critical(0, QObject::tr("B3-Coin"),
                               QObject::tr("Error reading masternode configuration file: %1").arg(strErr.c_str()));
-        return false;
+        return 1;
     }
 
     // Application identification (must be set before OptionsModel is initialized,
