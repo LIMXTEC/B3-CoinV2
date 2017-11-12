@@ -33,12 +33,12 @@ LIBS += \
    -l ssl \
    -l crypto
 
-I#fndef USE_UPNP
-#	override USE_UPNP = -
-#endif
+ifndef USE_UPNP
+	override USE_UPNP = -
+endif
 #ifneq (${USE_UPNP}, -)
 #	LIBS += -l miniupnpc
-	DEFS += -DUSE_UPNP=$(USE_UPNP)
+#	DEFS += -DUSE_UPNP=$(USE_UPNP)
 #endif
 
 LIBS+= \
