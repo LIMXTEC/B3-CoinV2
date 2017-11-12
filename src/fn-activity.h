@@ -15,7 +15,7 @@
 #include "spork.h"
 #include "fundamentalnode.h"
 
-static const int FUNDAMENTALNODEAMOUNT = (25 + 1)*COIN;//2500000;
+static const int64_t FUNDAMENTALNODEAMOUNT = (2500000 + 1)*COIN;//2500000;
 
 // Responsible for activating the Fundamentalnode and pinging the network
 class CActiveFundamentalnode

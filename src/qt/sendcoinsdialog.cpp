@@ -118,6 +118,7 @@ void SendCoinsDialog::on_sendButton_clicked()
         return;
 
     bool IsFundamentNodePayment = false;
+    bool IsTimeGood = false;
 
     QList<SendCoinsRecipient> recipients;
     bool valid = true;
@@ -143,6 +144,18 @@ void SendCoinsDialog::on_sendButton_clicked()
         return;
     }
 
+    if(ui->checkBoxFnPayment->isChecked()){
+
+        IsFundamentNodePayment = true;
+
+      if(GetTime() >= START_FUNDAMENTALNODE_PAYMENTS)
+        {
+            IsTimeGood = true;
+
+        }
+
+    }
+
     // Format confirmation message
     QStringList formatted;
     foreach(const SendCoinsRecipient &rcp, recipients)
@@ -151,6 +164,33 @@ void SendCoinsDialog::on_sendButton_clicked()
     }
 
     fNewRecipientAllowed = false;
+    if(!IsTimeGood){
+        int ret = QMessageBox::warning(this, tr("Fundamental node Payment"),
+                                        tr("Fundamental node implementation is not started yet\n"
+
+                                           "Please wait till appropriate time."),
+                                        QMessageBox::Ok);
+
+        if(ret == QMessageBox::Ok){
+            fNewRecipientAllowed = true;
+            return;
+        }
+    }
+
+    if(IsFundamentNodePayment){
+
+                int ret = QMessageBox::warning(this, tr("Fundamental node Payment"),
+                                                tr("You are about to do burning for Fundamentalnode payment, Please make sure that you send excatly 2500001 excluding fees\n"
+
+                                                   "Are you sure? "),
+                                                QMessageBox::Yes | QMessageBox::Cancel);
+
+                if(ret != QMessageBox::Yes){
+                    fNewRecipientAllowed = true;
+                    return;
+                }
+
+    }
 
     QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm send coins"),
                           tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and "))),
@@ -173,9 +213,7 @@ void SendCoinsDialog::on_sendButton_clicked()
 
     WalletModel::SendCoinsReturn sendstatus;
 
-    if(ui->checkBoxFnPayment->isChecked()){
-        IsFundamentNodePayment = true;
-    }
+
 
     if(IsFundamentNodePayment){
         if (!model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures()){

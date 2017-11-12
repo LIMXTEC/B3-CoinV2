@@ -2326,7 +2326,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
                     break;
                 }
 				
-				int64_t hardblockpowreward = vtx[0].vout[0].nValue; 
+
 				LogPrintf("## CheckBlock() : fundamental node payment %d\n", fundamentalnodePaymentAmount);
 				bool fIsInitialDownload = IsInitialBlockDownload();
 
@@ -2369,7 +2369,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 
                     if(!foundPaymentAndPayee) {
                         LogPrintf("CheckBlock() : !!Couldn't find fundamentalnode payment(%d|%d) or payee(%d|%s) nHeight %d. \n", foundPaymentAmount, fundamentalnodePaymentAmount, foundPayee, address2.ToString().c_str(), pindexBest->nHeight+1);
-                        //if(!RegTest()) return state.DoS(100, error("CheckBlock() : Couldn't find fundamentalnode payment or payee"));
+                        /*if(!RegTest())*/ return DoS(100, error("CheckBlock() : Couldn't find fundamentalnode payment or payee"));
                     } else {
                         LogPrintf("CheckBlock() : Found payment(%d|%d) or payee(%d|%s) nHeight %d. \n", foundPaymentAmount, fundamentalnodePaymentAmount, foundPayee, address2.ToString().c_str(), pindexBest->nHeight+1);
                     }
