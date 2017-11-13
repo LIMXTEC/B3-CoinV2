@@ -729,9 +729,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool fLimitFree,
 
         if((tx.GetValueIn(mapInputs) - tx.GetValueOut()) >= FUNDAMENTALNODEAMOUNT){
             nFees = tx.GetValueIn(mapInputs) - FUNDAMENTALNODEAMOUNT - tx.GetValueOut();
-            LogPrintf("Fundamental transaction ");
+            LogPrintf("Fundamental transaction\n");
         } else{
-            LogPrintf(" Not Fundamental transaction ");
+            LogPrintf("Not Fundamental transaction\n");
             nFees = tx.GetValueIn(mapInputs) - tx.GetValueOut();
         }
 
@@ -1633,10 +1633,10 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 
             if((nValueIn - GetValueOut()) >= FUNDAMENTALNODEAMOUNT ){
                 nTxFee = nValueIn - FUNDAMENTALNODEAMOUNT - GetValueOut();
-                LogPrintf("ConnectInputs : Funamental Transaction");
+                LogPrintf("ConnectInputs : Funamental Transaction\n");
             } else{
                 nTxFee = nValueIn - GetValueOut();
-                LogPrintf("ConnectInputs : Not a Funamental Transaction");
+                LogPrintf("ConnectInputs : Not a Funamental Transaction\n");
             }
 
 
@@ -1790,9 +1790,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             //check if burnt txn for fundamental node
             if((nTxValueIn - nTxValueOut) >= FUNDAMENTALNODEAMOUNT ){
                 IsFnBurntTxn = true;
-                //LogPrintf("IsFnBurntTxn is true now");
+                //LogPrintf("IsFnBurntTxn is true now\n");
             }else {
-                //LogPrintf("IsFnBurntTxn is flase Now, for FNamount = %d, nTxValueIn = %d, nTxValurOut = %d", FUNDAMENTALNODEAMOUNT, nTxValueIn, nTxValueOut);
+                //LogPrintf("IsFnBurntTxn is flase Now, for FNamount = %d, nTxValueIn = %d, nTxValurOut = %d\n", FUNDAMENTALNODEAMOUNT, nTxValueIn, nTxValueOut);
             }
 
             nValueIn += nTxValueIn;
@@ -1800,10 +1800,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             if (!tx.IsCoinStake()){
                 if(!IsFnBurntTxn){
                     nFees += nTxValueIn - nTxValueOut;
-                    //LogPrintf("ConnectBlock : Not a Funamental Transaction nFees = %d", nFees);
+                    //LogPrintf("ConnectBlock : Not a Funamental Transaction nFees = %d\n", nFees);
                 } else{
                     nFees += nTxValueIn - FUNDAMENTALNODEAMOUNT - nTxValueOut;
-                    //LogPrintf("ConnectBlock : Funamental Transaction, nFees = %d", nFees);
+                    //LogPrintf("ConnectBlock : Funamental Transaction, nFees = %d\n", nFees);
                 }
                 //nFees += nTxValueIn - nTxValueOut;
             }
